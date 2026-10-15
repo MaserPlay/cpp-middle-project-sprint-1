@@ -2,7 +2,6 @@
 
 #include <boost/program_options.hpp>
 #include <string>
-#include <unordered_map>
 
 namespace CryptoGuard {
 
@@ -26,7 +25,7 @@ public:
 
 private:
     COMMAND_TYPE command_;
-    const std::unordered_map<std::string_view, COMMAND_TYPE> commandMapping_ = {
+    static constexpr std::pair<std::string_view, COMMAND_TYPE> commandMapping_[]{
         {"encrypt", ProgramOptions::COMMAND_TYPE::ENCRYPT},
         {"decrypt", ProgramOptions::COMMAND_TYPE::DECRYPT},
         {"checksum", ProgramOptions::COMMAND_TYPE::CHECKSUM},
