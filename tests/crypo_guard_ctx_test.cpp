@@ -24,6 +24,29 @@ TEST(CryptoGuardCtxEncrypt, Success) {
     ASSERT_FALSE(outStr.str().empty());
 }
 
+TEST(CryptoGuardCtxEncrypt, IsStable) {
+    CryptoGuard::CryptoGuardCtx ctx;
+    std::stringstream inStr{"data"}, 
+        outStr1{},outStr2{},outStr3{},outStr4{};
+        
+    std::string password = "12345";
+
+    ASSERT_NO_THROW(ctx.EncryptFile(inStr, outStr1, password));
+    inStr.clear();          
+    inStr.seekg(0, std::ios::beg); 
+    ASSERT_NO_THROW(ctx.EncryptFile(inStr, outStr2, password));
+    inStr.clear();          
+    inStr.seekg(0, std::ios::beg); 
+    ASSERT_NO_THROW(ctx.EncryptFile(inStr, outStr3, password));
+    inStr.clear();          
+    inStr.seekg(0, std::ios::beg); 
+    ASSERT_NO_THROW(ctx.EncryptFile(inStr, outStr4, password));
+
+    ASSERT_EQ(outStr1.str(), outStr2.str());
+    ASSERT_EQ(outStr2.str(), outStr3.str());
+    ASSERT_EQ(outStr3.str(), outStr4.str());
+}
+
 TEST(CryptoGuardCtx, DecryptEncrypted) {
     CryptoGuard::CryptoGuardCtx ctx;
     std::stringstream dataStr{"Sensitive data"}, cryptedStr{}, decryptenData{};
@@ -33,10 +56,10 @@ TEST(CryptoGuardCtx, DecryptEncrypted) {
     ASSERT_EQ(dataStr.str(), dataStr.str());
 }
 
-TEST(CryptoGuardCtxDecrypt, EmptyStream) {
+TEST(CryptoGuardCtxDecrypt, NotRightPassword) {
     CryptoGuard::CryptoGuardCtx ctx;
     std::stringstream inStr{}, outStr{};
-    ASSERT_NO_THROW(ctx.DecryptFile(inStr, outStr, ""));
+    ASSERT_ANY_THROW(ctx.DecryptFile(inStr, outStr, ""));
 }
 
 TEST(CryptoGuardCtxDecrypt, FailedStream) {
@@ -47,11 +70,29 @@ TEST(CryptoGuardCtxDecrypt, FailedStream) {
     ASSERT_THROW(ctx.DecryptFile(inStr, outStr, ""), std::runtime_error);
 }
 
-TEST(CryptoGuardCtxDecrypt, Success) {
+TEST(CryptoGuardCtxDecrypt, IsStable) {
     CryptoGuard::CryptoGuardCtx ctx;
-    std::stringstream inStr{"Sensitive data"}, outStr{};
-    ASSERT_NO_THROW(ctx.DecryptFile(inStr, outStr, "12345"));
-    ASSERT_FALSE(outStr.str().empty());
+    std::stringstream raw{"data"}, encryptedStr{}, 
+        outStr1{},outStr2{},outStr3{},outStr4{};
+        
+    std::string password = "12345";
+
+    ASSERT_NO_THROW(ctx.EncryptFile(raw, encryptedStr, password));
+
+    ASSERT_NO_THROW(ctx.DecryptFile(encryptedStr, outStr1, password));
+    encryptedStr.clear();          
+    encryptedStr.seekg(0, std::ios::beg); 
+    ASSERT_NO_THROW(ctx.DecryptFile(encryptedStr, outStr2, password));
+    encryptedStr.clear();          
+    encryptedStr.seekg(0, std::ios::beg); 
+    ASSERT_NO_THROW(ctx.DecryptFile(encryptedStr, outStr3, password));
+    encryptedStr.clear();          
+    encryptedStr.seekg(0, std::ios::beg); 
+    ASSERT_NO_THROW(ctx.DecryptFile(encryptedStr, outStr4, password));
+
+    ASSERT_EQ(outStr1.str(), outStr2.str());
+    ASSERT_EQ(outStr2.str(), outStr3.str());
+    ASSERT_EQ(outStr3.str(), outStr4.str());
 }
 
 TEST(CryptoGuardCtxCalculateChecksum, Check1) {

@@ -24,7 +24,7 @@ struct CryptoGuardCtx::Impl {
         std::array<unsigned char, IV_SIZE> iv;    // Initialization vector
     };
 
-    AesCipherParams CreateChiperParamsFromPassword(std::string_view password) {
+    [[nodiscard]] AesCipherParams CreateChiperParamsFromPassword(std::string_view password) {
         AesCipherParams params;
         constexpr std::array<unsigned char, 8> salt = {'1', '2', '3', '4', '5', '6', '7', '8'};
 
@@ -36,62 +36,89 @@ struct CryptoGuardCtx::Impl {
 
         return params;
     }
+    
+    void DoCrypt(std::istream &inStream, std::ostream &outStream, std::string_view password, bool isEncrypt) {
 
-    void EncryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {
+        constexpr std::size_t BUF_SIZE = 16;
+            
+        if (!inStream) {
+            throw std::runtime_error("inStream not good");
+        }
+        if (!outStream) {
+            throw std::runtime_error("outStream not good");
+        }
+        
         auto ctxDeleter = [](EVP_CIPHER_CTX *ptr) { EVP_CIPHER_CTX_free(ptr); };
         std::unique_ptr<EVP_CIPHER_CTX, decltype(ctxDeleter)> ctx{EVP_CIPHER_CTX_new()};
 
         auto params = CreateChiperParamsFromPassword(password);
-        params.encrypt = 1;
+        params.encrypt = isEncrypt;
 
         if (!EVP_CipherInit_ex(ctx.get(), params.cipher, nullptr, params.key.data(), params.iv.data(),
                                params.encrypt)) {
             throw std::runtime_error("EVP_CipherInit_ex return error. " + getOpenSslError());
         }
 
-        std::array<unsigned char, 16 + EVP_MAX_BLOCK_LENGTH> outBuf{};
-        std::array<unsigned char, 16> inBuf{};
+        std::array<unsigned char, BUF_SIZE + EVP_MAX_BLOCK_LENGTH> outBuf{};
+        std::array<unsigned char, BUF_SIZE> inBuf{};
         int outLen, inLen;
 
-        for (; !inStream.eof();) {
+        while (!inStream.eof()) {
+
             if (!inStream) {
                 throw std::runtime_error("inStream not good");
             }
-            if (!outStream) {
-                throw std::runtime_error("outStream not good");
-            }
-            inStream.read(reinterpret_cast<char *>(inBuf.data()), 16);
+
+            inStream.read(reinterpret_cast<char *>(inBuf.data()), inBuf.size());
             inLen = inStream.gcount();
             if (!EVP_CipherUpdate(ctx.get(), outBuf.data(), &outLen, inBuf.data(), static_cast<int>(inLen))) {
                 throw std::runtime_error("EVP_CipherUpdate return error. " + getOpenSslError());
             }
             outStream.write(reinterpret_cast<char *>(outBuf.data()), outLen);
+
+            if (!outStream) {
+                throw std::runtime_error("outStream not good");
+            }
         }
         if (!EVP_CipherFinal_ex(ctx.get(), outBuf.data(), &outLen)) {
             throw std::runtime_error("EVP_CipherFinal_ex return error. " + getOpenSslError());
         }
         outStream.write(reinterpret_cast<char *>(outBuf.data()), outLen);
     }
-    void DecryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {
-        EncryptFile(inStream, outStream, password);  // It`s the same
+
+    void EncryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {
+        DoCrypt(inStream, outStream, password, true);
     }
-    std::string CalculateChecksum(std::istream &inStream) {
+    void DecryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {
+        DoCrypt(inStream, outStream, password, false);
+    }
+    [[nodiscard]] std::string CalculateChecksum(std::istream &inStream) {
+        
+        constexpr std::size_t BUF_SIZE = 16;
+
+        if (!inStream) {
+            throw std::runtime_error("inStream not good");
+        }
+            
         const auto md = EVP_sha256();
         if (md == NULL) {
             throw std::runtime_error("Unsupported digest algorithm. " + getOpenSslError());
         }
+        
         auto ctxDeleter = [](EVP_MD_CTX *ptr) { EVP_MD_CTX_free(ptr); };
         std::unique_ptr<EVP_MD_CTX, decltype(ctxDeleter)> ctx{EVP_MD_CTX_new()};
         if (!EVP_DigestInit_ex2(ctx.get(), md, NULL)) {
             throw std::runtime_error("Message digest initialization failed.. " + getOpenSslError());
         }
-        std::array<unsigned char, 16> inBuf{};
+
+        std::array<unsigned char, BUF_SIZE> inBuf{};
+
         int inLen;
-        for (; !inStream.eof();) {
+        while (!inStream.eof()) {
             if (!inStream) {
                 throw std::runtime_error("inStream not good");
             }
-            inStream.read(reinterpret_cast<char *>(inBuf.data()), 16);
+            inStream.read(reinterpret_cast<char *>(inBuf.data()), inBuf.size());
             inLen = inStream.gcount();
             if (!EVP_DigestUpdate(ctx.get(), inBuf.data(), static_cast<int>(inLen))) {
                 throw std::runtime_error("EVP_DigestUpdate return error. " + getOpenSslError());
